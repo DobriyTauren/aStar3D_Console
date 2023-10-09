@@ -1,0 +1,8 @@
+E:\projects E\Astar3d\Astar3d\bin\Debug\Astar3d.exe.config
+E:\projects E\Astar3d\Astar3d\bin\Debug\Astar3d.exe
+E:\projects E\Astar3d\Astar3d\bin\Debug\Astar3d.pdb
+E:\projects E\Astar3d\Astar3d\obj\Debug\Astar3d.csproj.AssemblyReference.cache
+E:\projects E\Astar3d\Astar3d\obj\Debug\Astar3d.csproj.SuggestedBindingRedirects.cache
+E:\projects E\Astar3d\Astar3d\obj\Debug\Astar3d.csproj.CoreCompileInputs.cache
+E:\projects E\Astar3d\Astar3d\obj\Debug\Astar3d.exe
+E:\projects E\Astar3d\Astar3d\obj\Debug\Astar3d.pdb
