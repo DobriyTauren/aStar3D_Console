@@ -23,108 +23,15 @@ public class Node3D
     }
 }
 
-
-public class AStar3D_BinaryTree
+public class Node3DNode
 {
-    public static List<Node3D> FindPath(int[,,] grid, Node3D start, Node3D end)
+    public Node3D Value { get; set; }
+    public Node3DNode Left { get; set; }
+    public Node3DNode Right { get; set; }
+
+    public Node3DNode(Node3D value)
     {
-        int width = grid.GetLength(0);
-        int height = grid.GetLength(1);
-        int depth = grid.GetLength(2);
-
-        // Инициализируем бинарное дерево
-        BinarySearchTree openList = new BinarySearchTree();
-        openList.Insert(start);
-
-        List<Node3D> closedList = new List<Node3D>();
-        object lockObject = new object(); // Объект для блокировки доступа к общим данным
-
-        while (openList.Count > 0)
-        {
-            Node3D current = openList.ExtractMin();
-
-            lock (lockObject)
-            {
-                closedList.Add(current);
-            }
-
-            if (current.X == end.X && current.Y == end.Y && current.Z == end.Z)
-            {
-                // Путь найден, восстанавливаем его
-                return ReconstructPath(current);
-            }
-
-            // Генерация соседей
-            int[] dx = { -1, 1, 0, 0, 0, 0 };
-            int[] dy = { 0, 0, -1, 1, 0, 0 };
-            int[] dz = { 0, 0, 0, 0, -1, 1 };
-
-            Parallel.For(0, 6, i =>
-            {
-                int newX = current.X + dx[i];
-                int newY = current.Y + dy[i];
-                int newZ = current.Z + dz[i];
-
-                if (IsInsideGrid(newX, newY, newZ, width, height, depth) && grid[newX, newY, newZ] == 0)
-                {
-                    Node3D neighbor = new Node3D(newX, newY, newZ);
-
-                    bool inClosedList;
-                    lock (lockObject)
-                    {
-                        inClosedList = closedList.Any(c => c.X == neighbor.X && c.Y == neighbor.Y && c.Z == neighbor.Z);
-                    }
-
-                    if (!inClosedList)
-                    {
-                        int tentativeG = current.G + 1;
-
-                        bool inOpenList;
-                        lock (lockObject)
-                        {
-                            inOpenList = openList.Contains(neighbor);
-                        }
-
-                        if (!inOpenList || tentativeG < neighbor.G)
-                        {
-                            neighbor.Parent = current;
-                            neighbor.G = tentativeG;
-                            neighbor.H = Math.Abs(newX - end.X) + Math.Abs(newY - end.Y) + Math.Abs(newZ - end.Z);
-
-                            lock (lockObject)
-                            {
-                                if (!inOpenList)
-                                {
-                                    openList.Insert(neighbor);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Путь не найден
-        return null;
-    }
-
-    private static List<Node3D> ReconstructPath(Node3D node)
-    {
-        List<Node3D> path = new List<Node3D>();
-
-        while (node != null)
-        {
-            path.Add(node);
-            node = node.Parent;
-        }
-
-        path.Reverse();
-        return path;
-    }
-
-    private static bool IsInsideGrid(int x, int y, int z, int width, int height, int depth)
-    {
-        return x >= 0 && x < width && y >= 0 && y < height && z >= 0 && z < depth;
+        Value = value;
     }
 }
 
@@ -132,7 +39,8 @@ public class BinarySearchTree
 {
     private Node3DNode root;
 
-    public bool Contains(Node3D node)    {
+    public bool Contains(Node3D node)
+    {
         return Search(root, node) != null;
     }
 
@@ -248,34 +156,338 @@ public class BinarySearchTree
     }
 }
 
-public class Node3DNode
+public class AStar3D_Heap
 {
-    public Node3D Value { get; set; }
-    public Node3DNode Left { get; set; }
-    public Node3DNode Right { get; set; }
+    private const int LIMIT_MULTIPLAYER = 2;
 
-    public Node3DNode(Node3D value)
+    public static List<Node3D> FindPath(int[,,] grid, Node3D start, Node3D end)
     {
-        Value = value;
+        int width = grid.GetLength(0);
+        int height = grid.GetLength(1);
+        int depth = grid.GetLength(2);
+
+        // Генерация соседей
+        int[] dx = { -1, 1, 0, 0, 0, 0 };
+        int[] dy = { 0, 0, -1, 1, 0, 0 };
+        int[] dz = { 0, 0, 0, 0, -1, 1 };
+
+        int nodesCount = width * height * depth;
+
+        // Инициализируем кучу для открытого списка
+        MinHeap openList = new MinHeap();
+        openList.Insert(start);
+
+        List<Node3D> closedList = new List<Node3D>();
+
+        while (openList.Count > 0 && !IsLooping(openList.Count, closedList.Count, nodesCount))
+        {
+            Node3D current = openList.ExtractMin();
+            closedList.Add(current);
+
+            if (current.X == end.X && current.Y == end.Y && current.Z == end.Z)
+            {
+                Console.WriteLine($"total nodes: {openList.Count + closedList.Count}");
+                // Путь найден, восстанавливаем его
+                return ReconstructPath(current);
+            }
+
+            for (int i = 0; i < 6; i++)
+            {
+                int newX = current.X + dx[i];
+                int newY = current.Y + dy[i];
+                int newZ = current.Z + dz[i];
+
+                if (IsInsideGrid(newX, newY, newZ, width, height, depth) && grid[newX, newY, newZ] == 0)
+                {
+                    Node3D neighbor = new Node3D(newX, newY, newZ);
+
+                    if (closedList.Contains(neighbor))
+                    {
+                        continue;
+                    }
+
+                    int tentativeG = current.G + 1;
+
+                    if (!openList.Contains(neighbor) || tentativeG < neighbor.G)
+                    {
+                        neighbor.Parent = current;
+                        neighbor.G = tentativeG;
+                        neighbor.H = Math.Abs(newX - end.X) + Math.Abs(newY - end.Y) + Math.Abs(newZ - end.Z);
+
+                        if (!openList.Contains(neighbor))
+                        {
+                            openList.Insert(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+
+        Console.WriteLine($"total nodes: {openList.Count + closedList.Count}");
+        // Путь не найден
+        return null;
+    }
+
+    private static bool IsLooping(int openListCount, int closedListCount, int nodesCount)
+    {
+        if (openListCount + closedListCount > nodesCount * LIMIT_MULTIPLAYER)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static List<Node3D> ReconstructPath(Node3D node)
+    {
+        List<Node3D> path = new List<Node3D>();
+
+        while (node != null)
+        {
+            path.Add(node);
+            node = node.Parent;
+        }
+
+        path.Reverse();
+        return path;
+    }
+
+    private static bool IsInsideGrid(int x, int y, int z, int width, int height, int depth)
+    {
+        return x >= 0 && x < width && y >= 0 && y < height && z >= 0 && z < depth;
+    }
+
+
+    public class MinHeap
+    {
+        private List<Node3D> heap = new List<Node3D>();
+
+        public int Count => heap.Count;
+
+        public void Insert(Node3D node)
+        {
+            heap.Add(node);
+            HeapifyUp(heap.Count - 1);
+        }
+
+        public Node3D ExtractMin()
+        {
+            if (heap.Count == 0)
+                throw new InvalidOperationException("The heap is empty.");
+
+            Node3D min = heap[0];
+            int lastIndex = heap.Count - 1;
+            heap[0] = heap[lastIndex];
+            heap.RemoveAt(lastIndex);
+
+            if (heap.Count > 0)
+            {
+                HeapifyDown(0);
+            }
+
+            return min;
+        }
+
+        public bool Contains(Node3D node)
+        {
+            return heap.Contains(node);
+        }
+
+        private void HeapifyUp(int index)
+        {
+            int parentIndex = (index - 1) / 2;
+            while (index > 0 && Compare(heap[index], heap[parentIndex]) < 0)
+            {
+                Swap(index, parentIndex);
+                index = parentIndex;
+                parentIndex = (index - 1) / 2;
+            }
+        }
+
+        private void HeapifyDown(int index)
+        {
+            int leftChildIndex = 2 * index + 1;
+            int rightChildIndex = 2 * index + 2;
+            int smallest = index;
+
+            if (leftChildIndex < heap.Count && Compare(heap[leftChildIndex], heap[index]) < 0)
+            {
+                smallest = leftChildIndex;
+            }
+
+            if (rightChildIndex < heap.Count && Compare(heap[rightChildIndex], heap[smallest]) < 0)
+            {
+                smallest = rightChildIndex;
+            }
+
+            if (smallest != index)
+            {
+                Swap(index, smallest);
+                HeapifyDown(smallest);
+            }
+        }
+
+        private void Swap(int i, int j)
+        {
+            Node3D temp = heap[i];
+            heap[i] = heap[j];
+            heap[j] = temp;
+        }
+
+        private int Compare(Node3D a, Node3D b)
+        {
+            int f1 = a.G + a.H;
+            int f2 = b.G + b.H;
+            return f1.CompareTo(f2);
+        }
     }
 }
 
+public class AStar3D_BinaryTree
+{
+    private const int LIMIT_MULTIPLAYER = 2;
 
+    public static List<Node3D> FindPath(int[,,] grid, Node3D start, Node3D end)
+    {
+        int width = grid.GetLength(0);
+        int height = grid.GetLength(1);
+        int depth = grid.GetLength(2);
+
+        // Генерация соседей
+        int[] dx = { -1, 1, 0, 0, 0, 0 };
+        int[] dy = { 0, 0, -1, 1, 0, 0 };
+        int[] dz = { 0, 0, 0, 0, -1, 1 };
+
+        int nodesCount = height * width * depth;
+
+        // Инициализируем бинарное дерево
+        BinarySearchTree openList = new BinarySearchTree();
+        openList.Insert(start);
+
+        List<Node3D> closedList = new List<Node3D>();
+        object lockObject = new object(); // Объект для блокировки доступа к общим данным
+
+        while (openList.Count > 0 && !IsLooping(openList.Count, closedList.Count, nodesCount))
+        {
+            Node3D current = openList.ExtractMin();
+
+            lock (lockObject)
+            {
+                closedList.Add(current);
+            }
+
+            if (current.X == end.X && current.Y == end.Y && current.Z == end.Z)
+            {
+                Console.WriteLine($"total nodes: {openList.Count + closedList.Count}");
+
+                // Путь найден, восстанавливаем его
+                return ReconstructPath(current);
+            }
+
+            Parallel.For(0, 6, i =>
+            {
+                int newX = current.X + dx[i];
+                int newY = current.Y + dy[i];
+                int newZ = current.Z + dz[i];
+
+                if (IsInsideGrid(newX, newY, newZ, width, height, depth) && grid[newX, newY, newZ] == 0)
+                {
+                    Node3D neighbor = new Node3D(newX, newY, newZ);
+
+                    bool inClosedList;
+                    lock (lockObject)
+                    {
+                        inClosedList = closedList.Any(c => c.X == neighbor.X && c.Y == neighbor.Y && c.Z == neighbor.Z);
+                    }
+
+                    if (!inClosedList)
+                    {
+                        int tentativeG = current.G + 1;
+
+                        bool inOpenList;
+                        lock (lockObject)
+                        {
+                            inOpenList = openList.Contains(neighbor);
+                        }
+
+                        if (!inOpenList || tentativeG < neighbor.G)
+                        {
+                            neighbor.Parent = current;
+                            neighbor.G = tentativeG;
+                            neighbor.H = Math.Abs(newX - end.X) + Math.Abs(newY - end.Y) + Math.Abs(newZ - end.Z);
+
+                            lock (lockObject)
+                            {
+                                if (!inOpenList)
+                                {
+                                    openList.Insert(neighbor);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Путь не найден
+        Console.WriteLine($"total nodes: {openList.Count + closedList.Count}");
+
+        return null;
+    }
+
+    private static List<Node3D> ReconstructPath(Node3D node)
+    {
+        List<Node3D> path = new List<Node3D>();
+
+        while (node != null)
+        {
+            path.Add(node);
+            node = node.Parent;
+        }
+
+        path.Reverse();
+        return path;
+    }
+
+    private static bool IsInsideGrid(int x, int y, int z, int width, int height, int depth)
+    {
+        return x >= 0 && x < width && y >= 0 && y < height && z >= 0 && z < depth;
+    }
+
+    private static bool IsLooping(int openListCount, int closedListCount, int nodesCount)
+    {
+        if (openListCount + closedListCount > nodesCount * LIMIT_MULTIPLAYER)
+        {
+            return true;
+        }
+
+        return false;
+    }
+}
 
 public class AStar3D
 {
+    private const int LIMIT_MULTIPLAYER = 2;
+
     public static List<Node3D> FindPathOneThread(int[,,] grid, Node3D start, Node3D end)
     {
         int width = grid.GetLength(0);
         int height = grid.GetLength(1);
         int depth = grid.GetLength(2);
 
+        int nodesCount = width * height * depth;
+
         List<Node3D> openList = new List<Node3D>();
         List<Node3D> closedList = new List<Node3D>();
 
+        // Генерация соседей
+        int[] dx = { -1, 1, 0, 0, 0, 0 };
+        int[] dy = { 0, 0, -1, 1, 0, 0 };
+        int[] dz = { 0, 0, 0, 0, -1, 1 };
+
         openList.Add(start);
 
-        while (openList.Count > 0)
+        while (openList.Count > 0 && !IsLooping(openList.Count, closedList.Count, nodesCount))
         {
             Node3D current = openList[0];
 
@@ -294,13 +506,11 @@ public class AStar3D
             if (current.X == end.X && current.Y == end.Y && current.Z == end.Z)
             {
                 // Путь найден, восстанавливаем его
+                Console.WriteLine($"total nodes: {openList.Count + closedList.Count}");
+
                 return ReconstructPath(current);
             }
 
-            // Генерация соседей
-            int[] dx = { -1, 1, 0, 0, 0, 0 };
-            int[] dy = { 0, 0, -1, 1, 0, 0 };
-            int[] dz = { 0, 0, 0, 0, -1, 1 };
 
             for (int i = 0; i < 6; i++)
             {
@@ -333,6 +543,7 @@ public class AStar3D
                 }
             }
         }
+        Console.WriteLine($"total nodes: {openList.Count + closedList.Count}");
 
         // Путь не найден
         return null;
@@ -497,13 +708,15 @@ public class AStar3D
         int height = grid.GetLength(1);
         int depth = grid.GetLength(2);
 
+        int nodesCount = width * height * depth;
+
         List<Node3D> openList = new List<Node3D>();
         List<Node3D> closedList = new List<Node3D>();
         object lockObject = new object(); // Объект для блокировки доступа к общим данным
 
         openList.Add(start);
 
-        while (openList.Count > 0)
+        while (openList.Count > 0 && !IsLooping(openList.Count, closedList.Count, nodesCount))
         {
             Node3D current = openList[0];
 
@@ -799,7 +1012,6 @@ public class AStar3D
         return null;
     }
 
-
     private static async Task ProcessNeighborAsync(Node3D neighbor, Node3D current, Node3D end, List<Node3D> openList, List<Node3D> closedList, object lockObject)
     {
         lock (lockObject)
@@ -857,6 +1069,16 @@ public class AStar3D
     {
         return x >= 0 && x < width && y >= 0 && y < height && z >= 0 && z < depth;
     }
+
+    private static bool IsLooping (int openListCount, int closedListCount, int nodesCount)
+    {
+        if (openListCount + closedListCount > nodesCount * LIMIT_MULTIPLAYER)
+        {
+            return true;
+        }
+
+        return false;
+    }
 }
 
 class Program
@@ -865,13 +1087,18 @@ class Program
     static void Main(string[] args)
     {
         Node3D start = new Node3D(0, 0, 0);
-        Node3D end = new Node3D(6, 6, 6);
+        Node3D end = new Node3D(11, 11, 11);
         
         FindPathAlgorithm[] findPathAlgorithms = new FindPathAlgorithm[] 
         { 
-            AStar3D_BinaryTree.FindPath, AStar3D.FindPathOneThread, AStar3D.FindPath_PLINQ, 
+            AStar3D_Heap.FindPath,
+            AStar3D_BinaryTree.FindPath,
+            AStar3D.FindPathOneThread, 
+            AStar3D.FindPath_PLINQ,
+            
             //AStar3D.FindPathMultiThread_ParallelFor, AStar3D.FindPathMultiThread_ParallelForEach,
             //AStar3D.FindPath_TPL, AStar3D.FindPath_ThreadPool, AStar3D.FindPath_AsyncTasks,
+
         };
 
 
@@ -879,12 +1106,10 @@ class Program
         {
             _startTime = DateTime.Now;
 
-            int[,,] grid = GenerateRandomGrid(7, 7, 7);
+            int[,,] grid = GenerateRandomGrid(16, 16, 16);
 
-            if (grid[end.X, end.Y, end.Z] == 1)
-            {
-                grid[end.X, end.Y, end.Z] = 0;
-            }
+            grid[end.X, end.Y, end.Z] = 0;
+            grid[start.X, start.Y, start.Z] = 0;
 
             CheckAlgorithmsSpeed(grid, start, end, findPathAlgorithms);
 
